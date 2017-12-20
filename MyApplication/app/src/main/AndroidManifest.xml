@@ -14,7 +14,8 @@
         android:supportsRtl="true"
         android:theme="@style/AppTheme">
         <activity
-            android:name=".HomeActivity">
+            android:name=".HomeActivity"
+            android:configChanges="screenSize|orientation|locale">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 

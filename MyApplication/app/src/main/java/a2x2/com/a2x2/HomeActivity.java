@@ -2,29 +2,42 @@ package a2x2.com.a2x2;
 
 import android.Manifest;
 import android.annotation.SuppressLint;
+import android.content.BroadcastReceiver;
+import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.support.v4.app.ActivityCompat;
 import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
+import android.webkit.CookieManager;
+import android.webkit.CookieSyncManager;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
+import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.ImageView;
 import android.widget.ProgressBar;
+import android.widget.TextView;
 
 import com.github.clans.fab.FloatingActionButton;
 
+import java.io.File;
+
 public class HomeActivity extends AppCompatActivity implements View.OnClickListener {
 
-    private WebView webview;
+    private WebView webView;
     private ProgressBar progressBar;
     private AlertDialog alertDialog;
+    private BroadcastReceiver receiver;
+    private TextView tvInterner;
 
     @SuppressLint("SetJavaScriptEnabled")
     @Override
@@ -33,13 +46,88 @@ public class HomeActivity extends AppCompatActivity implements View.OnClickListe
         setContentView(R.layout.activity_home);
 
         findViewById();
-        webview.getSettings().setJavaScriptEnabled(true);
-        webView();
+
+        if (NetworkUtil.getConnectivityStatus(HomeActivity.this) == 0) {
+            tvInterner.setVisibility(View.VISIBLE);
+            progressBar.setVisibility(View.VISIBLE);
+        } else {
+            tvInterner.setVisibility(View.GONE);
+            webView();
+        }
+        webView.getSettings().setJavaScriptEnabled(true);
+        registerReceiver();
+        webViewSettings();
+        clearCookiesAndCache(HomeActivity.this);
+    }
+
+    private void webViewSettings() {
+        webView.getSettings().setDomStorageEnabled(true);
+        webView.getSettings().setBuiltInZoomControls(true);
+        webView.getSettings().setDisplayZoomControls(false);
+        webView.getSettings().setCacheMode(WebSettings.LOAD_NO_CACHE);
+        webView.getSettings().setAppCacheEnabled(false);
+        webView.clearHistory();
+        webView.clearFormData();
+        webView.clearCache(true);
+    }
+
+    public void clearCookiesAndCache(Context context) {
+        File dir = getCacheDir();
+        if (dir != null && dir.isDirectory()) {
+            try {
+                File[] children = dir.listFiles();
+                if (children.length > 0) {
+                    for (int i = 0; i < children.length; i++) {
+                        File[] temp = children[i].listFiles();
+                        for (int x = 0; x < temp.length; x++) {
+                            temp[x].delete();
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                Log.e("Cache", "failed cache clean");
+            }
+        }
+
+        CookieSyncManager.createInstance(context);
+        CookieManager cookieManager = CookieManager.getInstance();
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            cookieManager.removeAllCookies(null);
+        } else {
+            cookieManager.removeAllCookie();
+        }
+    }
+
+    private void registerReceiver() {
+        receiver = new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context context, Intent intent) {
+                if (NetworkUtil.getConnectivityStatus(HomeActivity.this) != 0) {
+                    tvInterner.setVisibility(View.GONE);
+                    webView();
+                } else {
+                    tvInterner.setVisibility(View.VISIBLE);
+                    progressBar.setVisibility(View.VISIBLE);
+                }
+            }
+        };
+        IntentFilter intFilt = new IntentFilter("status");
+        registerReceiver(receiver, intFilt);
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        if (receiver != null) {
+            unregisterReceiver(receiver);
+        }
     }
 
     private void findViewById() {
+        tvInterner = (TextView) findViewById(R.id.tv_not_internet);
         progressBar = (ProgressBar) findViewById(R.id.progressbar);
-        webview = (WebView) findViewById(R.id.webview);
+        webView = (WebView) findViewById(R.id.webview);
         FloatingActionButton call = (FloatingActionButton) findViewById(R.id.call);
         call.setOnClickListener(this);
         initAlertDialog();
@@ -60,7 +148,7 @@ public class HomeActivity extends AppCompatActivity implements View.OnClickListe
     }
 
     private void webView() {
-        webview.setWebChromeClient(new WebChromeClient() {
+        webView.setWebChromeClient(new WebChromeClient() {
             @Override
             public void onProgressChanged(WebView view, int newProgress) {
                 super.onProgressChanged(view, newProgress);
@@ -80,20 +168,20 @@ public class HomeActivity extends AppCompatActivity implements View.OnClickListe
             }
         });
 
-        webview.setWebViewClient(new WebViewClient() {
+        webView.setWebViewClient(new WebViewClient() {
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 return false;
             }
         });
 
-        webview.loadUrl("http://2x2.am/");
+        webView.loadUrl("http://2x2.am/");
     }
 
     @Override
     public void onBackPressed() {
-        if (webview.canGoBack()) {
-            webview.goBack();
+        if (webView.canGoBack()) {
+            webView.goBack();
         } else {
             super.onBackPressed();
         }

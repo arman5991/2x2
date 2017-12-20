@@ -4,5 +4,6 @@
     <color name="colorGreenDark">#329636</color>
     <color name="colorAccent">#FF4081</color>
     <color name="colorGreen">#329636</color>
+    <color name="colorGreenTransparent">#4d329636</color>
 
 </resources>

@@ -31,4 +31,15 @@
         android:layout_margin="12dp"
         android:src="@drawable/call"
         fab:fab_size="normal" />
+
+    <TextView
+        android:id="@+id/tv_not_internet"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_centerInParent="true"
+        android:layout_above="@id/progressbar"
+        android:layout_marginTop="30dp"
+        android:text="@string/not_internet"
+        android:textColor="#ff0000"
+        android:textSize="24sp" />
 </RelativeLayout>
