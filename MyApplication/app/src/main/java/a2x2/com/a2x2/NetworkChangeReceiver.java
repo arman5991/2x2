@@ -11,6 +11,4 @@ public class NetworkChangeReceiver extends BroadcastReceiver {
         Intent i = new Intent("status");
         context.sendBroadcast(i);
     }
-
-
 }

@@ -7,14 +7,18 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.PackageManager;
+import android.net.ConnectivityManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.support.v4.app.ActivityCompat;
+import android.support.v4.content.ContextCompat;
+import android.support.v4.widget.SwipeRefreshLayout;
 import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
 import android.view.LayoutInflater;
+import android.view.MotionEvent;
 import android.view.View;
 import android.webkit.CookieManager;
 import android.webkit.CookieSyncManager;
@@ -24,7 +28,6 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.ImageView;
-import android.widget.ProgressBar;
 import android.widget.TextView;
 
 import com.github.clans.fab.FloatingActionButton;
@@ -34,10 +37,11 @@ import java.io.File;
 public class HomeActivity extends AppCompatActivity implements View.OnClickListener {
 
     private WebView webView;
-    private ProgressBar progressBar;
     private AlertDialog alertDialog;
     private BroadcastReceiver receiver;
-    private TextView tvInterner;
+    private TextView tvInternet;
+    private static final Integer CALL = 0x2;
+    private SwipeRefreshLayout mSwipeRefreshLayout;
 
     @SuppressLint("SetJavaScriptEnabled")
     @Override
@@ -46,14 +50,8 @@ public class HomeActivity extends AppCompatActivity implements View.OnClickListe
         setContentView(R.layout.activity_home);
 
         findViewById();
-
-        if (NetworkUtil.getConnectivityStatus(HomeActivity.this) == 0) {
-            tvInterner.setVisibility(View.VISIBLE);
-            progressBar.setVisibility(View.VISIBLE);
-        } else {
-            tvInterner.setVisibility(View.GONE);
-            webView();
-        }
+        askForPermission(Manifest.permission.CALL_PHONE, CALL);
+        isConnected();
         webView.getSettings().setJavaScriptEnabled(true);
         registerReceiver();
         webViewSettings();
@@ -91,29 +89,37 @@ public class HomeActivity extends AppCompatActivity implements View.OnClickListe
 
         CookieSyncManager.createInstance(context);
         CookieManager cookieManager = CookieManager.getInstance();
-
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             cookieManager.removeAllCookies(null);
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            CookieManager.getInstance().removeAllCookies(null);
         } else {
-            cookieManager.removeAllCookie();
+            CookieManager.getInstance().removeAllCookie();
         }
     }
 
     private void registerReceiver() {
+        IntentFilter intentFilter = new IntentFilter();
+        intentFilter.addAction(ConnectivityManager.CONNECTIVITY_ACTION);
+        registerReceiver(new NetworkChangeReceiver(), intentFilter);
         receiver = new BroadcastReceiver() {
             @Override
             public void onReceive(Context context, Intent intent) {
-                if (NetworkUtil.getConnectivityStatus(HomeActivity.this) != 0) {
-                    tvInterner.setVisibility(View.GONE);
-                    webView();
-                } else {
-                    tvInterner.setVisibility(View.VISIBLE);
-                    progressBar.setVisibility(View.VISIBLE);
-                }
+                isConnected();
             }
         };
         IntentFilter intFilt = new IntentFilter("status");
         registerReceiver(receiver, intFilt);
+    }
+
+    private void isConnected() {
+        if (NetworkUtil.getConnectivityStatus(HomeActivity.this) != 0) {
+            tvInternet.setVisibility(View.GONE);
+            webView();
+        } else {
+            tvInternet.setVisibility(View.VISIBLE);
+            mSwipeRefreshLayout.setRefreshing(true);
+        }
     }
 
     @Override
@@ -125,12 +131,20 @@ public class HomeActivity extends AppCompatActivity implements View.OnClickListe
     }
 
     private void findViewById() {
-        tvInterner = (TextView) findViewById(R.id.tv_not_internet);
-        progressBar = (ProgressBar) findViewById(R.id.progressbar);
+        mSwipeRefreshLayout = (SwipeRefreshLayout) findViewById(R.id.swiperefresh);
+        tvInternet = (TextView) findViewById(R.id.tv_not_internet);
         webView = (WebView) findViewById(R.id.webview);
         FloatingActionButton call = (FloatingActionButton) findViewById(R.id.call);
         call.setOnClickListener(this);
         initAlertDialog();
+
+        mSwipeRefreshLayout.setColorSchemeColors(ContextCompat.getColor(HomeActivity.this, R.color.colorGreen));
+        mSwipeRefreshLayout.setOnRefreshListener(new SwipeRefreshLayout.OnRefreshListener() {
+            @Override
+            public void onRefresh() {
+                webView();
+            }
+        });
     }
 
     private void initAlertDialog() {
@@ -152,12 +166,10 @@ public class HomeActivity extends AppCompatActivity implements View.OnClickListe
             @Override
             public void onProgressChanged(WebView view, int newProgress) {
                 super.onProgressChanged(view, newProgress);
-                progressBar.setProgress(newProgress);
                 if (newProgress == 100) {
-                    progressBar.setVisibility(View.GONE);
+                    mSwipeRefreshLayout.setRefreshing(false);
                 } else {
-                    progressBar.setVisibility(View.VISIBLE);
-                    progressBar.setProgress(newProgress);
+                    mSwipeRefreshLayout.setRefreshing(true);
                 }
             }
 
@@ -212,11 +224,30 @@ public class HomeActivity extends AppCompatActivity implements View.OnClickListe
     private void call(String number) {
         Intent i = new Intent(Intent.ACTION_CALL);
         i.setData(Uri.parse("tel:" + number));
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.CALL_PHONE) != PackageManager.PERMISSION_GRANTED) {
+        if (ActivityCompat.checkSelfPermission(HomeActivity.this, Manifest.permission.CALL_PHONE) != PackageManager.PERMISSION_GRANTED) {
             return;
         }
         alertDialog.dismiss();
         startActivity(i);
     }
 
+    private void askForPermission(String permission, Integer requestCode) {
+        if (ContextCompat.checkSelfPermission(HomeActivity.this, permission) != PackageManager.PERMISSION_GRANTED) {
+            if (ActivityCompat.shouldShowRequestPermissionRationale(HomeActivity.this, permission)) {
+                ActivityCompat.requestPermissions(HomeActivity.this, new String[]{permission}, requestCode);
+            } else {
+                ActivityCompat.requestPermissions(HomeActivity.this, new String[]{permission}, requestCode);
+            }
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+    }
+
+    @Override
+    public boolean onTouchEvent(MotionEvent event) {
+        return super.onTouchEvent(event);
+    }
 }
